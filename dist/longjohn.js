@@ -1,5 +1,5 @@
 (function() {
-  var ERROR_ID, EventEmitter, call_stack_location, create_callsite, current_trace_error, filename, format_location, format_method, in_prepare, limit_frames, prepareStackTrace, wrap_callback, __nextDomainTick, _addListener, _listeners, _nextTick, _on, _once, _removeListener, _setImmediate, _setInterval, _setTimeout;
+  var ERROR_ID, EventEmitter, call_stack_location, create_callsite, current_trace_error, empty_frame_marker, filename, format, format_location, format_method, in_prepare, limit_frames, prepareStackTrace, wrap_callback, __nextDomainTick, _addListener, _listeners, _nextTick, _on, _once, _removeListener, _setImmediate, _setInterval, _setTimeout;
 
   EventEmitter = require('events').EventEmitter;
 
@@ -8,6 +8,8 @@
   current_trace_error = null;
 
   in_prepare = 0;
+
+  empty_frame_marker = "QD8tnByN6XbQb_JZlwdnpb7x5edS44c";
 
   exports.empty_frame = '---------------------------------------------';
 
@@ -57,7 +59,7 @@
 
   exports.format_stack_frame = function(frame) {
     var location, method;
-    if (frame.getFileName() === exports.empty_frame) {
+    if (frame.getFileName().indexOf(empty_frame_marker) > 0) {
       return exports.empty_frame;
     }
     method = format_method(frame);
@@ -97,14 +99,31 @@
       getMethodName: function() {
         return null;
       },
+      getFunction: function() {
+        return null;
+      },
       getColumnNumber: function() {
         return null;
       },
       isNative: function() {
         return null;
+      },
+      isEval: function() {
+        return null;
+      },
+      isConstructor: function() {
+        return null;
+      },
+      isToplevel: function() {
+        return null;
+      },
+      toString: function() {
+        return location;
       }
     });
   };
+
+  format = Error.prepareStackTrace || exports.format_stack;
 
   prepareStackTrace = function(error, structured_stack_trace) {
     var previous_stack, _ref;
@@ -119,7 +138,7 @@
       if (error.__previous__ != null) {
         previous_stack = error.__previous__.stack;
         if ((previous_stack != null ? previous_stack.length : void 0) > 0) {
-          error.__cached_trace__.push(create_callsite(exports.empty_frame));
+          error.__cached_trace__.push(create_callsite(empty_frame_marker));
           (_ref = error.__cached_trace__).push.apply(_ref, previous_stack);
         }
       }
@@ -128,7 +147,7 @@
     if (in_prepare > 0) {
       return error.__cached_trace__;
     }
-    return exports.format_stack(error, error.__cached_trace__);
+    return format(error, error.__cached_trace__).replace(RegExp("^.*" + empty_frame_marker + ".*$", "gm"), exports.empty_frame);
   };
 
   limit_frames = function(stack) {

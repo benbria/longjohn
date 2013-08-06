@@ -3,6 +3,8 @@ filename = __filename
 current_trace_error = null
 in_prepare = 0
 
+empty_frame_marker = "QD8tnByN6XbQb_JZlwdnpb7x5edS44c"
+
 exports.empty_frame = '---------------------------------------------'
 exports.async_trace_limit = 10
 
@@ -35,7 +37,7 @@ format_method = (frame) ->
   null
 
 exports.format_stack_frame = (frame) ->
-  return exports.empty_frame if frame.getFileName() is exports.empty_frame
+  return exports.empty_frame if frame.getFileName().indexOf(empty_frame_marker) > 0
   
   method = format_method(frame)
   location = format_location(frame)
@@ -59,9 +61,16 @@ create_callsite = (location) ->
     getFunctionName: -> null
     getTypeName: -> null
     getMethodName: -> null
+    getFunction: -> null
     getColumnNumber: -> null
     isNative: -> null
+    isEval: -> null
+    isConstructor: -> null
+    isToplevel: -> null
+    toString: -> location
   }
+
+format = Error.prepareStackTrace || exports.format_stack
 
 prepareStackTrace = (error, structured_stack_trace) ->
   ++in_prepare
@@ -73,13 +82,13 @@ prepareStackTrace = (error, structured_stack_trace) ->
     if error.__previous__?
       previous_stack = error.__previous__.stack
       if previous_stack?.length > 0
-        error.__cached_trace__.push(create_callsite(exports.empty_frame))
+        error.__cached_trace__.push(create_callsite(empty_frame_marker))
         error.__cached_trace__.push(previous_stack...)
   
   --in_prepare
   
   return error.__cached_trace__ if in_prepare > 0
-  exports.format_stack(error, error.__cached_trace__)
+  format(error, error.__cached_trace__).replace(///^.*#{empty_frame_marker}.*$///gm, exports.empty_frame)
 
 limit_frames = (stack) ->
   return if exports.async_trace_limit <= 0
