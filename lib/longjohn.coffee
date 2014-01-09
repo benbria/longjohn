@@ -11,37 +11,37 @@ exports.async_trace_limit = 10
 format_location = (frame) ->
   return 'native' if frame.isNative()
   return 'eval at ' + frame.getEvalOrigin() if frame.isEval()
-  
+
   file = frame.getFileName()
   line = frame.getLineNumber()
   column = frame.getColumnNumber()
-  
+
   return 'unknown source' unless file?
   column = if column? then ':' + column else ''
   line = if line? then ':' + line else ''
-  
+
   file + line + column
 
 format_method = (frame) ->
   function_name = frame.getFunctionName()
-  
+
   unless frame.isToplevel() or frame.isConstructor()
     method = frame.getMethodName()
     type = frame.getTypeName()
     return "#{type}.#{method ? '<anonymous>'}" unless function_name?
     return "#{type}.#{function_name}" if method is function_name
     "#{type}.#{function_name} [as #{method}]"
-  
+
   return "new #{function_name ? '<anonymous>'}" if frame.isConstructor()
   return function_name if function_name?
   null
 
 exports.format_stack_frame = (frame) ->
   return exports.empty_frame if frame.getFileName().indexOf(empty_frame_marker) > 0
-  
+
   method = format_method(frame)
   location = format_location(frame)
-  
+
   return "    at #{location}" unless method?
   "    at #{method} (#{location})"
 
@@ -74,28 +74,28 @@ format = Error.prepareStackTrace || exports.format_stack
 
 prepareStackTrace = (error, structured_stack_trace) ->
   ++in_prepare
-  
+
   unless error.__cached_trace__?
     error.__cached_trace__ = structured_stack_trace.filter (f) -> f.getFileName() isnt filename
     error.__previous__ = current_trace_error if !error.__previous__? and in_prepare is 1
-    
+
     if error.__previous__?
       previous_stack = error.__previous__.stack
       if previous_stack?.length > 0
         error.__cached_trace__.push(create_callsite(empty_frame_marker))
         error.__cached_trace__.push(previous_stack...)
-  
+
   --in_prepare
-  
+
   return error.__cached_trace__ if in_prepare > 0
   format(error, error.__cached_trace__).replace(///^.*#{empty_frame_marker}.*$///gm, exports.empty_frame)
 
 limit_frames = (stack) ->
   return if exports.async_trace_limit <= 0
-  
+
   count = exports.async_trace_limit - 1
   previous = stack
-  
+
   while previous? and count > 1
     previous = previous.__previous__
     --count
@@ -110,8 +110,13 @@ call_stack_location = ->
   Error.captureStackTrace(err, arguments.callee)
   stack = err.stack
   Error.prepareStackTrace = orig
-  
-  "#{stack[2].getFunctionName()} (#{stack[2].getFileName()}:#{stack[2].getLineNumber()})"
+
+  if stack[2]
+    return "#{stack[2].getFunctionName()} (#{stack[2].getFileName()}:#{stack[2].getLineNumber()})"
+  else
+    # Fix for weirdo case we're running into in our migration script, when longjohn shouldn't even
+    # be running in the first place.
+    return "longjohn-unknown 0:0"
 
 wrap_callback = (callback, location) ->
   trace_error = new Error()
@@ -120,9 +125,9 @@ wrap_callback = (callback, location) ->
   trace_error.__location__ = location
   trace_error.__previous__ = current_trace_error
   trace_error.__trace_count__ = if current_trace_error? then current_trace_error.__trace_count__ + 1 else 1
-  
+
   limit_frames(trace_error)
-  
+
   new_callback = ->
     current_trace_error = trace_error
     # Clear trace_error variable from the closure, so it can potentially be garbage collected.
@@ -136,7 +141,7 @@ wrap_callback = (callback, location) ->
       throw e
     finally
       current_trace_error = null
-  
+
   new_callback.__original_callback__ = callback
   new_callback
 
@@ -169,17 +174,17 @@ EventEmitter.prototype.removeListener = (event, callback) ->
       val.__original_callback__ is callback or
       val.__original_callback__?.listener?.__original_callback__ is callback or
       val.listener?.__original_callback__ is callback
-    
+
     return null unless @_events?[event]?
     return @_events[event] if is_callback(@_events[event])
-    
+
     if Array.isArray(@_events[event])
       listeners = @_events[event] ? []
       for l in listeners
         return l if is_callback(l)
-    
+
     null
-  
+
   listener = find_listener(callback)
   return @ unless listener? and typeof listener is 'function'
   _removeListener.call(@, event, listener)

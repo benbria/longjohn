@@ -178,7 +178,11 @@
     Error.captureStackTrace(err, arguments.callee);
     stack = err.stack;
     Error.prepareStackTrace = orig;
-    return "" + (stack[2].getFunctionName()) + " (" + (stack[2].getFileName()) + ":" + (stack[2].getLineNumber()) + ")";
+    if (stack[2]) {
+      return "" + (stack[2].getFunctionName()) + " (" + (stack[2].getFileName()) + ":" + (stack[2].getLineNumber()) + ")";
+    } else {
+      return "longjohn-unknown 0:0";
+    }
   };
 
   wrap_callback = function(callback, location) {
